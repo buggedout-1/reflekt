@@ -158,11 +158,6 @@ def check_dom_sinks(html, pos, canary):
     if srcdoc_match:
         return {"type": "srcdoc", "note": "entities decoded"}
 
-    # Check if in href/src attribute (javascript: protocol possible)
-    href_match = re.search(r'<a[^>]*\shref\s*=\s*["\'][^"\']*$', before, re.IGNORECASE)
-    if href_match:
-        return {"type": "href", "note": "javascript: protocol"}
-
     # Check if in data-* attribute that feeds innerHTML
     data_attr_match = re.search(r'<[^>]+\sdata-\w+\s*=\s*["\'][^"\']*$', before, re.IGNORECASE)
     if data_attr_match:
@@ -294,10 +289,6 @@ def build_probe(canary, ctx):
         # DOM sink like innerHTML - entities get decoded
         return canary + "<" + suffix, None
 
-    if ctx["type"] == "href":
-        # Test javascript: protocol - use a unique marker
-        return "javascript:" + canary, None
-
     return None, None
 
 # -------------------------
@@ -394,17 +385,6 @@ def verify_probe(test_html, probe, ctx):
         if data_match:
             data_content = data_match.group(1)
             if probe in data_content or encoded_probe in data_content:
-                return True
-        return False
-
-    if ctx["type"] == "href":
-        # Check if javascript: protocol passes through in href
-        # Look for href="javascript:canary" pattern
-        href_match = re.search(r'href\s*=\s*["\']([^"\']*)["\']', test_html, re.IGNORECASE)
-        if href_match:
-            href_content = href_match.group(1)
-            # Check if javascript: and canary are both present (not filtered)
-            if probe.lower() in href_content.lower():
                 return True
         return False
 
