@@ -119,7 +119,7 @@ def inject_canaries(url):
 # -------------------------
 # HTTP
 # -------------------------
-def fetch(url):
+def fetch(url, return_content_type=False):
     try:
         r = requests.get(
             url,
@@ -128,9 +128,34 @@ def fetch(url):
             verify=False,
             allow_redirects=True
         )
+        if return_content_type:
+            content_type = r.headers.get("Content-Type", "").lower()
+            return r.text, content_type
         return r.text
     except Exception:
+        if return_content_type:
+            return None, None
         return None
+
+# -------------------------
+# Check if Content-Type is exploitable for XSS
+# -------------------------
+def is_html_content_type(content_type):
+    """Only HTML/XHTML responses can have exploitable reflected XSS"""
+    if not content_type:
+        return True  # Assume HTML if no Content-Type (be conservative)
+
+    # Extract MIME type (before ; charset=... or other parameters)
+    mime_type = content_type.split(";")[0].strip().lower()
+
+    # XSS-exploitable content types
+    html_types = [
+        "text/html",
+        "application/xhtml+xml",
+        "application/xhtml",
+    ]
+
+    return mime_type in html_types
 
 # -------------------------
 # Find reflections
@@ -403,8 +428,14 @@ def scan(url):
             counter.update(url, 0)
         return
 
-    html = fetch(injected)
+    html, content_type = fetch(injected, return_content_type=True)
     if not html:
+        if counter:
+            counter.update(url, 0)
+        return
+
+    # Skip non-HTML responses (JSON, plain text, etc.) - XSS not exploitable
+    if not is_html_content_type(content_type):
         if counter:
             counter.update(url, 0)
         return
