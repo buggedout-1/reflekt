@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import requests
+from requests.adapters import HTTPAdapter
 import random
 import string
 import re
@@ -13,6 +14,19 @@ requests.packages.urllib3.disable_warnings()
 
 UA = "Reflekt/1.0"
 TIMEOUT = 10  # Default timeout
+# Thread-local sessions for connection reuse (avoids TLS handshake per request)
+_thread_local = threading.local()
+
+def _get_session():
+    if not hasattr(_thread_local, "session"):
+        s = requests.Session()
+        s.headers.update({"User-Agent": UA})
+        s.verify = False
+        adapter = HTTPAdapter(pool_connections=10, pool_maxsize=10)
+        s.mount("https://", adapter)
+        s.mount("http://", adapter)
+        _thread_local.session = s
+    return _thread_local.session
 
 # -------------------------
 # Progress Counter
@@ -121,17 +135,17 @@ def inject_canaries(url):
 # -------------------------
 def fetch(url, return_content_type=False):
     try:
-        r = requests.get(
+        session = _get_session()
+        r = session.get(
             url,
-            headers={"User-Agent": UA},
             timeout=TIMEOUT,
-            verify=False,
             allow_redirects=True
         )
+        text = r.text
+        content_type = r.headers.get("Content-Type", "").lower() if return_content_type else None
         if return_content_type:
-            content_type = r.headers.get("Content-Type", "").lower()
-            return r.text, content_type
-        return r.text
+            return text, content_type
+        return text
     except Exception:
         if return_content_type:
             return None, None
@@ -175,7 +189,7 @@ def find_reflections(html, cmap):
 # Check for special DOM sink attributes
 # -------------------------
 def check_dom_sinks(html, pos, canary):
-    """Check for DOM XSS patterns like data-* → innerHTML, srcdoc, href javascript:, etc."""
+    """Check for DOM XSS patterns like data-* â†’ innerHTML, srcdoc, href javascript:, etc."""
     before = html[:pos]
 
     # Check if in srcdoc attribute (decodes HTML entities)
