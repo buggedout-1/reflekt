@@ -1,180 +1,346 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.7+-blue.svg" alt="Python">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/version-1.0-orange.svg" alt="Version">
-</p>
+<div align="center">
 
-<h1 align="center">
-  <br>
-  Reflekt
-  <br>
-</h1>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:ff6b6b,100:845ef7&height=220&section=header&text=Reflekt&fontSize=80&fontColor=ffffff&fontAlignY=35&desc=Smart%20Reflected%20XSS%20Scanner&descSize=20&descAlignY=55&animation=fadeIn" width="100%"/>
 
-<h4 align="center">Smart Reflected XSS Scanner with Zero False Positives</h4>
+<br/>
 
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#usage">Usage</a> •
-  <a href="#how-it-works">How It Works</a> •
-  <a href="#output">Output</a>
-</p>
+<img src="https://img.shields.io/badge/python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+<img src="https://img.shields.io/badge/license-MIT-00C853?style=for-the-badge" />
+<img src="https://img.shields.io/badge/version-1.0-FF6D00?style=for-the-badge" />
+<img src="https://img.shields.io/badge/XSS-Context--Aware-E91E63?style=for-the-badge&logo=hackthebox&logoColor=white" />
+
+<br/><br/>
+
+> **Reflekt** doesn't just find reflections — it understands **where** your input lands<br/>and verifies if it's actually **exploitable**.
+
+<br/>
+
+[Features](#-features) | [Install](#-installation) | [Usage](#-usage) | [How It Works](#-how-it-works) | [Output](#-output-format) | [Workflow](#-recommended-workflow)
+
+<br/>
+
+```
+  ____       __ _      _    _
+ |  _ \ ___ / _| | ___| | _| |_
+ | |_) / _ \ |_| |/ _ \ |/ / __|
+ |  _ <  __/  _| |  __/   <| |_
+ |_| \_\___|_| |_|\___|_|\_\\__|
+
+   Context-Aware XSS Detection
+```
+
+</div>
 
 ---
 
-## Overview
+## Why Reflekt?
 
-**Reflekt** is an intelligent reflected XSS vulnerability scanner that uses context-aware detection to minimize false positives. Unlike traditional scanners that blindly inject payloads, Reflekt first understands *where* your input lands in the response and then crafts minimal probes to verify actual exploitability.
+Most XSS scanners spray payloads like `<script>alert(1)</script>` and grep the response. This triggers WAFs, generates noise, and misses context-specific vulnerabilities.
+
+**Reflekt takes a different approach:**
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  [1/100] Found: 12 | https://target.com/search?q=test       │
-│                                                             │
-│  https://target.com/search?q=probe | q | attribute(")       │
-│  https://target.com/page?id=probe | id | script(')          │
-│  https://target.com/view?name=probe | name | html           │
-│                                                             │
-│  [100/100] Total findings: 47                               │
-│  Results saved to: results.txt                              │
-└─────────────────────────────────────────────────────────────┘
+Traditional Scanner                    Reflekt
+
+  Inject payload -----> Grep          Inject canary -----> Find reflection
+       |                  |                |                     |
+       v                  v                v                     v
+  "Found XSS!"     90% false pos     Detect context        Build smart probe
+                                           |                     |
+                                           v                     v
+                                      Attribute? Script?    Send & verify
+                                      HTML? DOM sink?       in correct context
+                                           |                     |
+                                           v                     v
+                                      Craft minimal        Confirmed. Zero noise.
+                                      context probe
 ```
+
+---
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Context Detection** | Identifies HTML, attribute, script, and comment contexts |
-| **Quote-Aware** | Detects single, double, backtick quotes and unquoted attributes |
-| **WAF Bypass Testing** | Tests `</script>` breakout with WAF-safe probes |
-| **DOM Sink Detection** | Identifies `srcdoc`, `innerHTML`, `javascript:` sinks |
-| **Zero Payloads** | No `<script>alert(1)</script>` - uses minimal probes |
-| **Multi-threaded** | Parallel scanning for large URL lists |
-| **False Positive Prevention** | Context-aware verification eliminates noise |
+<table>
+<tr>
+<td width="50%">
+
+### Detection
+- **6 reflection contexts** detected automatically
+- **Quote-aware** — single, double, backtick, unquoted
+- **DOM sink detection** — srcdoc, innerHTML+dataset
+- **HTML comment filtering** — skips non-exploitable contexts
+- **Content-Type filtering** — skips JSON/XML/text responses
+
+</td>
+<td width="50%">
+
+### Performance
+- **Thread-local connection pooling** — TLS sessions reused
+- **Multi-threaded** — scales to 50+ concurrent threads
+- **Smart deduplication** — one report per param+context
+- **Minimal probes** — no bulky payloads, no WAF triggers
+- **Streaming progress** — real-time stderr updates
+
+</td>
+</tr>
+</table>
+
+---
 
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/reflekt.git
 cd reflekt
-
-# Install dependencies
-pip install -r requirements.txt
+pip install requests
 ```
+
+That's it. Pure Python 3.8+, single dependency.
+
+---
 
 ## Usage
 
-### Basic Scan
+### Single URL
 ```bash
-# Single URL
-python reflekt.py -u "https://target.com/search?q=test&page=1"
-
-# Multiple URLs from file
-python reflekt.py -l urls.txt
+python3 reflekt.py -u "https://target.com/search?q=test&lang=en"
 ```
 
-### Advanced Options
+### Scan URL List
 ```bash
-# 10 threads, 20s timeout, save results
-python reflekt.py -l urls.txt -t 10 --timeout 20 -o results.txt
-
-# Fast scan with high concurrency
-python reflekt.py -l urls.txt -t 20 -o output.txt
+python3 reflekt.py -l urls.txt -t 50 -o results.txt
 ```
 
-### Options
+### All Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-u, --url` | Single URL to scan | - |
-| `-l, --list` | File containing URLs | - |
-| `-o, --output` | Save results to file | - |
-| `-t, --threads` | Concurrent threads | 1 |
-| `--timeout` | Request timeout (seconds) | 10 |
+```
+Usage: reflekt.py [-u URL | -l FILE] [options]
+
+Required (one of):
+  -u, --url       Single URL to scan
+  -l, --list      File containing URLs (one per line)
+
+Options:
+  -t, --threads   Number of concurrent threads    [default: 1]
+  -o, --output    Save results to file
+  --timeout       Request timeout in seconds       [default: 10]
+```
+
+### Examples
+
+```bash
+# Quick single target
+python3 reflekt.py -u "https://example.com/page?id=1&name=test"
+
+# Large list with 50 threads
+python3 reflekt.py -l parameterized_urls.txt -t 50 -o findings.txt
+
+# Slow targets — longer timeout, fewer threads
+python3 reflekt.py -l urls.txt -t 10 --timeout 20 -o results.txt
+
+# Pipe results cleanly (progress on stderr, results on stdout)
+python3 reflekt.py -l urls.txt -t 50 2>/dev/null > results.txt
+```
+
+---
 
 ## How It Works
 
-### 1. Canary Injection
-Reflekt injects unique canary strings into each parameter:
+<div align="center">
+
 ```
-?name=reflekt1xK9m&id=reflekt2pQ7z
+         +---------------------+
+         |    Target URL        |
+         |  ?id=1&name=foo      |
+         +---------+-----------+
+                   |
+         +---------v-----------+
+         |   Inject Canaries    |
+         |  id=buggedout1AbC    |
+         |  name=buggedout2xYz  |
+         +---------+-----------+
+                   |
+         +---------v-----------+
+         |   Fetch Response     |
+         |  (TLS session reuse) |
+         +---------+-----------+
+                   |
+         +---------v-----------+
+         |  Find Reflections    |
+         |  Where did canary    |
+         |  land in the HTML?   |
+         +---------+-----------+
+                   |
+     +-------------+-------------+
+     |             |             |
++----v----+  +----v----+  +----v----+
+|  HTML   |  |  Attr   |  | Script  |
+| <p>..   |  | value=" |  | var x=' |
+| Probe:  |  | Probe:  |  | Probe:  |
+|   <x7   |  |   "x7   |  |  ';//x7 |
++----+----+  +----+----+  +----+----+
+     |             |             |
+     +-------------+-------------+
+                   |
+         +---------v-----------+
+         |   Send Probe &       |
+         |   Verify Context     |
+         |                      |
+         |  - Quote not encoded?|
+         |  - Not escaped?      |
+         |  - Correct context?  |
+         +---------+-----------+
+                   |
+         +---------v-----------+
+         |   Confirmed XSS      |
+         +---------------------+
 ```
 
-### 2. Context Detection
-Analyzes where each canary appears in the response:
+</div>
 
-| Context | Example | Probe |
-|---------|---------|-------|
-| HTML Body | `<div>reflekt1xK9m</div>` | `canary<x7` |
-| Attribute (") | `value="reflekt1xK9m"` | `canary"x7` |
-| Attribute (') | `value='reflekt1xK9m'` | `canary'x7` |
-| Script (') | `var x='reflekt1xK9m'` | `canary';//x7` |
-| Script (") | `var x="reflekt1xK9m"` | `canary";//x7` |
-| Unquoted | `value=reflekt1xK9m` | `canary>x7` |
+### Step 1: Canary Injection
 
-### 3. Verification
-Each probe is verified in the correct context:
-- Attribute breakout: Checks quote is NOT HTML-encoded
-- Script breakout: Verifies quote is NOT escaped (`\'`)
-- HTML injection: Confirms `<` appears outside script blocks
-- Fallback: Tests `</script>` tag breakout if quote fails
+Each parameter gets a unique canary — a random string that won't appear naturally in the page:
 
-### 4. Smart Deduplication
-Reports each vulnerability once per parameter+context combination.
+```
+Original:  ?name=john&role=admin
+Injected:  ?name=buggedout1kQ9m&role=buggedout2pX7z
+```
+
+### Step 2: Context Detection
+
+Reflekt analyzes the HTML structure around each reflected canary:
+
+| Context | What It Looks Like | Probe Sent |
+|---------|-------------------|------------|
+| **HTML Body** | `<div>CANARY</div>` | `canary<x7` |
+| **Attribute `"`** | `<input value="CANARY">` | `canary"x7` |
+| **Attribute `'`** | `<input value='CANARY'>` | `canary'x7` |
+| **Attribute unquoted** | `<input value=CANARY>` | `canary>x7` |
+| **Script `'`** | `var x = 'CANARY';` | `canary';//x7` |
+| **Script `"`** | `var x = "CANARY";` | `canary";//x7` |
+| **Script `` ` ``** | `` var x = `CANARY`; `` | `` canary`;//x7 `` |
+| **Script raw** | `var x = CANARY;` | `canary;//x7` |
+
+### Step 3: Context-Aware Verification
+
+This is what makes Reflekt different. It doesn't just check "is my string in the response?" — it verifies exploitability:
+
+```
+Attribute Breakout:
+  Probe:   buggedout1abc"x7
+  Check 1: Is " literal? (not &quot; or &#34; or &#x22;)
+  Check 2: Does it break the attribute context?
+  Result:  CONFIRMED only if both pass
+
+Script Breakout:
+  Probe:   buggedout1abc';//x7
+  Check 1: Is ' inside a <script> block?
+  Check 2: Is ' NOT escaped as \' ?
+  Check 3: If fail -> try </script> tag breakout (fallback)
+  Result:  CONFIRMED only if unescaped in script context
+
+HTML Injection:
+  Probe:   buggedout1abc<x7
+  Check 1: Does < appear in response?
+  Check 2: Is it OUTSIDE <script> blocks? (not just in JS string)
+  Result:  CONFIRMED only if injectable in HTML body
+```
+
+### Advanced Detection
+
+| Context | Detection | Why It Matters |
+|---------|-----------|---------------|
+| **HTML Comment** | `<!-- CANARY -->` | **Skipped** — not exploitable |
+| **srcdoc** | `<iframe srcdoc="CANARY">` | HTML entities get decoded by browser |
+| **DOM Sink** | `data-x="CANARY"` + `innerHTML=dataset.x` | JS decodes entities at runtime |
+| **Script tag breakout** | Fallback when JS quote escape fails | `</script><img onerror=...>` |
+
+---
 
 ## Output Format
 
 ```
-URL | PARAMETER | CONTEXT
+URL | parameter | context
 ```
 
-### Examples
+### Example Results
+
 ```
-https://target.com/s?q=probe"x7 | q | attribute(")
-https://target.com/p?id=probe';//x7 | id | script(')
-https://target.com/v?x=probe<x7 | x | html
-https://target.com/j?data=probe</script><x7 | data | script(</tag>)
-```
-
-### Context Types
-
-| Context | Meaning |
-|---------|---------|
-| `html` | HTML body injection (`<tag>` possible) |
-| `attribute(")` | Double-quoted attribute breakout |
-| `attribute(')` | Single-quoted attribute breakout |
-| `attribute(unquoted)` | Unquoted attribute breakout |
-| `script(')` | Single-quoted JS string breakout |
-| `script(")` | Double-quoted JS string breakout |
-| `script(`)` | Template literal breakout |
-| `script(</tag>)` | Script tag closure breakout |
-| `href` | javascript: protocol injection |
-| `srcdoc` | iframe srcdoc entity decoding |
-| `dom_sink` | innerHTML/dataset DOM XSS |
-
-## Performance Tips
-
-```bash
-# Large lists: use more threads
-python reflekt.py -l 10k-urls.txt -t 20 -o results.txt
-
-# Slow targets: increase timeout
-python reflekt.py -l urls.txt --timeout 30 -t 5
-
-# Quick scan: lower timeout, more threads
-python reflekt.py -l urls.txt --timeout 5 -t 30
+https://target.com/search?q=buggedout1abc%22x7       | q    | attribute(")
+https://target.com/page?name=buggedout1abc%3Cx7       | name | html
+https://target.com/app?data=buggedout1abc%27%3B//x7   | data | script(')
+https://target.com/view?msg=...%3C/script%3E%3Cx7     | msg  | script(</tag>)
 ```
 
-## Contributing
+### Context Types Reference
 
-Pull requests are welcome! For major changes, please open an issue first.
-
-## License
-
-MIT License - feel free to use in your security assessments.
+| Output | Meaning | Exploitability |
+|--------|---------|---------------|
+| `html` | HTML body — tag injection works | `<img onerror=...>` |
+| `attribute(")` | Double-quoted attribute breakout | `" onfocus=... autofocus="` |
+| `attribute(')` | Single-quoted attribute breakout | `' onfocus=... autofocus='` |
+| `attribute(unquoted)` | Unquoted attribute | `onfocus=... ` |
+| `script(')` | JS single-quoted string breakout | `';alert();//` |
+| `script(")` | JS double-quoted string breakout | `";alert();//` |
+| `script(`)` | JS template literal breakout | `` `;alert();// `` |
+| `script(</tag>)` | Script tag closure | `</script><img onerror=...>` |
+| `srcdoc` | iframe srcdoc injection | Entity-decoded HTML |
+| `dom_sink` | innerHTML via dataset | Entity-decoded DOM XSS |
 
 ---
 
-<p align="center">
-  <b>Reflekt</b> - Because smart scanning beats payload spraying.
-</p>
+## Recommended Workflow
+
+```bash
+# 1. Collect parameterized URLs
+katana -u https://target.com -d 3 -f qurl | tee all_urls.txt
+waybackurls target.com | grep "=" >> all_urls.txt
+
+# 2. Deduplicate
+sort -u all_urls.txt > unique_urls.txt
+
+# 3. Scan with Reflekt
+python3 reflekt.py -l unique_urls.txt -t 50 -o xss_results.txt
+
+# 4. Review confirmed findings
+cat xss_results.txt
+```
+
+---
+
+## Performance Notes
+
+| Feature | Benefit |
+|---------|---------|
+| **TLS Session Reuse** | Thread-local connection pools — no redundant handshakes |
+| **Content-Type Filter** | Skips JSON, XML, plain text (XSS not possible) |
+| **Smart Dedup** | One probe per param+context combo, not per reflection |
+| **Minimal Probes** | 1-3 char probes instead of full payloads — faster, stealthier |
+
+---
+
+## Contributing
+
+Pull requests welcome! For major changes, please open an issue first.
+
+## License
+
+MIT License — free to use in your security assessments.
+
+---
+
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:ff6b6b,100:845ef7&height=120&section=footer" width="100%"/>
+
+**Smart scanning beats payload spraying.**
+
+</div>
+
+
+
+
+
+
+
